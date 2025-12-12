@@ -149,21 +149,21 @@ plot_candlestick() {
 EOF
 }
 
-# Plot 1: Bitcoin Price Trend (Last 24 Hours)
+# Plot 1: Bitcoin Price Trend (Last 3 Days)
 plot_24h_price() {
-    echo "Generating 24-hour price trend plot..."
+    echo "Generating 3-day price trend plot..."
     
     local query="
         SELECT 
             UNIX_TIMESTAMP(timestamp) as time,
             price_usd
         FROM bitcoin_prices 
-        WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 3 DAY)
         ORDER BY timestamp;
     "
     
     extract_data "$query" "$DATA_DIR/24h_price.dat"
-    plot_line "$DATA_DIR/24h_price.dat" "Bitcoin Price - Last 24 Hours" "Time" "Price (USD)" "$PLOT_DIR/plot_01_24h_price.png" "$COLOR1"
+    plot_line "$DATA_DIR/24h_price.dat" "Bitcoin Price - Last 3 Days" "Time" "Price (USD)" "$PLOT_DIR/plot_01_24h_price.png" "$COLOR1"
 }
 
 # Plot 2: Bitcoin Price Trend (Last 7 Days)
@@ -354,15 +354,15 @@ EOF
 plot_market_cap() {
     echo "Generating market cap trend plot..."
     
-    # 由于market_cap为NULL，我们使用价格乘以一个估算的比特币数量来模拟市值
-    # 同时添加移动平均线来展示趋势
+    # 改为柱状图显示每日平均市值
     local query="
         SELECT 
-            UNIX_TIMESTAMP(timestamp) as time,
-            price_usd * 19000000 as estimated_market_cap
+            DATE(timestamp) as date,
+            AVG(price_usd * 19000000) as daily_avg_market_cap
         FROM bitcoin_prices 
         WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-        ORDER BY timestamp;
+        GROUP BY DATE(timestamp)
+        ORDER BY date;
     "
     
     extract_data "$query" "$DATA_DIR/market_cap.dat"
@@ -370,19 +370,19 @@ plot_market_cap() {
     gnuplot -persist <<-EOF
         set terminal png enhanced size 1200,600
         set output '$PLOT_DIR/plot_07_market_cap.png'
-        set title 'Bitcoin Estimated Market Cap - Last 7 Days' font ',16'
-        set xlabel 'Time' font ',12'
-        set ylabel 'Estimated Market Cap (USD)' font ',12'
+        set title 'Bitcoin Daily Average Market Cap - Last 7 Days' font ',16'
+        set xlabel 'Date' font ',12'
+        set ylabel 'Market Cap (USD)' font ',12'
         set grid
         set key left top
+        set style fill solid 0.5
+        set boxwidth 0.8 relative
         set datafile separator '\t'
-        set xdata time
-        set timefmt '%s'
-        set format x '%m/%d'
+        set style data histograms
+        set style histogram clustered
+        set style fill solid border -1
         
-        # 添加移动平均线（5个数据点的移动平均）
-        plot '$DATA_DIR/market_cap.dat' using 1:2 with lines linewidth 2 linecolor rgb '$COLOR3' title 'Est. Market Cap', \
-             '$DATA_DIR/market_cap.dat' using 1:2 smooth bezier with lines linewidth 2 linecolor rgb '$COLOR1' title 'Trend Line'
+        plot '$DATA_DIR/market_cap.dat' using 2 with boxes linewidth 2 linecolor rgb '$COLOR3' title 'Daily Avg Market Cap'
 EOF
 }
 
